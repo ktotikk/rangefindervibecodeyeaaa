@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Дальномер</title>
+<style>
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: local('JetBrains Mono');
+  }
+
+  :root{
+    --bg: #0A0C0B;
+    --panel: #121512;
+    --line: #23281f;
+    --reticle: #9FE870;
+    --reticle-dim: #5c7a44;
+    --amber: #E8A34D;
+    --steel: #7A8577;
+    --ink: #EDEFE7;
+    --danger: #E0645A;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  #app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- CAMERA VIEW ---------- */
+  #viewport {
+    position: relative;
+    flex: 1;
+    background: #000;
+    overflow: hidden;
+  }
+
+  #camera {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #startOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: radial-gradient(ellipse at center, #12150f 0%, #060706 100%);
+    text-align: center;
+    padding: 32px;
+    z-index: 30;
+  }
+
+  #startOverlay .mark {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--reticle);
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    opacity: 0.85;
+  }
+
+  #startOverlay h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0.01em;
+  }
+
+  #startOverlay p {
+    color: var(--steel);
+    font-size: 13.5px;
+    line-height: 1.5;
+    max-width: 320px;
+    margin: 0;
+  }
+
+  #startBtn {
+    margin-top: 6px;
+    background: var(--reticle);
+    color: #0A0C0B;
+    border: none;
+    padding: 13px 30px;
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    border-radius: 3px;
+    font-family: inherit;
+  }
+
+  #camError {
+    color: var(--danger);
+    font-size: 12.5px;
+    max-width: 300px;
+    display: none;
+  }
+
+  /* ---------- HUD OVERLAY ---------- */
+  #hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: none;
+    z-index: 10;
+  }
+
+  .corner {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 1.5px solid var(--reticle-dim);
+    opacity: 0.9;
+  }
+  .corner.tl { top: 14px; left: 14px; border-right: none; border-bottom: none; }
+  .corner.tr { top: 14px; right: 14px; border-left: none; border-bottom: none; }
+  .corner.bl { bottom: 14px; left: 14px; border-right: none; border-top: none; }
+  .corner.br { bottom: 14px; right: 14px; border-left: none; border-top: none; }
+
+  #topLabel {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    color: var(--reticle);
+    opacity: 0.9;
+  }
+
+  /* Draggable marker line: two horizontal handles user drags to bracket object height */
+  #markerLayer {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+  }
+
+  .handle-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    touch-action: none;
+  }
+
+  .handle-line {
+    flex: 1;
+    height: 1px;
+    background: var(--reticle);
+    opacity: 0.9;
+    position: relative;
+  }
+  .handle-line::before, .handle-line::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    width: 1px;
+    height: 7px;
+    background: var(--reticle);
+  }
+  .handle-line::before { left: 10%; }
+  .handle-line::after { left: 90%; }
+
+  .handle-grip {
+    width: 34px;
+    height: 34px;
+    margin: -17px 0 0 -17px;
+    border-radius: 50%;
+    background: rgba(159,232,112,0.14);
+    border: 1.5px solid var(--reticle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    left: 8px;
+  }
+  .handle-grip::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--reticle);
+  }
+
+  .handle-tag {
+    position: absolute;
+    left: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--reticle);
+    background: rgba(10,12,11,0.55);
+    padding: 2px 6px;
+    border-radius: 2px;
+    top: -20px;
+  }
+
+  #vBracket {
+    position: absolute;
+    left: 50%;
+    width: 1px;
+    background: repeating-linear-gradient(to bottom, var(--reticle-dim) 0 4px, transparent 4px 8px);
+    pointer-events: none;
+  }
+
+  #heightReadout {
+    position: absolute;
+    left: 50%;
+    transform: translateX(14px);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--steel);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* ---------- DATA PANEL ---------- */
+  #panel {
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    padding: 16px 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .field-label {
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    color: var(--steel);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  #objInput {
+    flex: 1;
+    background: #0d0f0c;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    padding: 9px 10px;
+    border-radius: 3px;
+    min-width: 0;
+  }
+  #objInput:focus { outline: none; border-color: var(--reticle-dim); }
+
+  #presetRow {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  #presetRow::-webkit-scrollbar { display: none; }
+
+  .preset {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--steel);
+    background: #0d0f0c;
+    border: 1px solid var(--line);
+    padding: 6px 11px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .preset.active {
+    color: #0A0C0B;
+    background: var(--reticle);
+    border-color: var(--reticle);
+    font-weight: 700;
+  }
+
+  #readoutBig {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 0 2px;
+  }
+
+  #distValue {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 46px;
+    font-weight: 700;
+    color: var(--reticle);
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  #distUnit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    color: var(--steel);
+  }
+
+  #distSub {
+    text-align: center;
+    font-size: 11px;
+    color: var(--steel);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+    min-height: 14px;
+  }
+
+  #calibRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    font-size: 10.5px;
+    color: var(--steel);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  #calibRow button {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--steel);
+    font-family: inherit;
+    font-size: 10.5px;
+    padding: 6px 10px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+  #calibRow button.on {
+    color: var(--amber);
+    border-color: var(--amber);
+  }
+
+  /* Calibration modal */
+  #calModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(6,7,6,0.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 24px;
+  }
+  #calModal .box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 22px;
+    max-width: 340px;
+    width: 100%;
+  }
+  #calModal h2 {
+    font-size: 15px;
+    margin: 0 0 10px;
+  }
+  #calModal p {
+    font-size: 12.5px;
+    color: var(--steel);
+    line-height: 1.55;
+    margin: 0 0 14px;
+  }
+  #calModal input {
+    width: 100%;
+    background: #0d0f0c;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    padding: 9px 10px;
+    border-radius: 3px;
+    margin-bottom: 14px;
+  }
+  #calModal .btnrow {
+    display: flex;
+    gap: 8px;
+  }
+  #calModal button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 13px;
+    border: none;
+  }
+  #calSave { background: var(--reticle); color: #0A0C0B; font-weight: 700; }
+  #calCancel { background: transparent; color: var(--steel); border: 1px solid var(--line) !important; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="viewport">
+    <video id="camera" autoplay playsinline muted></video>
+
+    <div id="startOverlay">
+      <div class="mark">// ОПТИЧЕСКИЙ ДАЛЬНОМЕР</div>
+      <h1>Измерение расстояния по камере</h1>
+      <p>Отметьте верх и низ объекта известной высоты в кадре — приложение вычислит дистанцию до него.</p>
+      <button id="startBtn">Включить камеру</button>
+      <div id="camError">Не удалось получить доступ к камере. Проверьте разрешения браузера.</div>
+    </div>
+
+    <div id="hud">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div id="topLabel">НАВЕДИТЕ МАРКЕРЫ НА ОБЪЕКТ</div>
+
+      <div id="vBracket"></div>
+      <div id="heightReadout"></div>
+
+      <div id="markerLayer">
+        <div class="handle-row" id="topHandle">
+          <div class="handle-line"></div>
+          <div class="handle-tag">ВЕРХ</div>
+          <div class="handle-grip"></div>
+        </div>
+        <div class="handle-row" id="botHandle">
+          <div class="handle-line"></div>
+          <div class="handle-tag">НИЗ</div>
+          <div class="handle-grip"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div class="row">
+      <span class="field-label" style="width:78px;">Объект</span>
+      <input id="objInput" type="number" inputmode="decimal" placeholder="Высота, см" value="170">
+    </div>
+    <div id="presetRow">
+      <div class="preset" data-v="170">Человек 170</div>
+      <div class="preset" data-v="200">Дверь 200</div>
+      <div class="preset" data-v="243">Легковой авто 150</div>
+      <div class="preset" data-v="330">Столб/этаж 300</div>
+      <div class="preset" data-v="24">Лист А4 29.7</div>
+    </div>
+
+    <div id="readoutBig">
+      <span id="distValue">—</span>
+      <span id="distUnit">м</span>
+    </div>
+    <div id="distSub">Разведите маркеры по высоте объекта в кадре</div>
+
+    <div id="calibRow">
+      <span id="calibStatus">Фокусное расстояние: по умолчанию</span>
+      <button id="calibBtn">Калибровать</button>
+    </div>
+  </div>
+</div>
+
+<div id="calModal">
+  <div class="box">
+    <h2>Калибровка камеры</h2>
+    <p>Встаньте на известном расстоянии (например, 200 см) от объекта известной высоты, выставьте маркеры по нему и введите точное расстояние до объекта — приложение подстроит фокусное расстояние под вашу камеру для более точных измерений в дальнейшем.</p>
+    <input id="calDistInput" type="number" inputmode="decimal" placeholder="Фактическое расстояние, см">
+    <div class="btnrow">
+      <button id="calCancel">Отмена</button>
+      <button id="calSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const video = document.getElementById('camera');
+  const startOverlay = document.getElementById('startOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const camError = document.getElementById('camError');
+  const hud = document.getElementById('hud');
+  const viewport = document.getElementById('viewport');
+  const topHandle = document.getElementById('topHandle');
+  const botHandle = document.getElementById('botHandle');
+  const vBracket = document.getElementById('vBracket');
+  const heightReadout = document.getElementById('heightReadout');
+  const objInput = document.getElementById('objInput');
+  const distValue = document.getElementById('distValue');
+  const distSub = document.getElementById('distSub');
+  const presets = document.querySelectorAll('.preset');
+  const calibBtn = document.getElementById('calibBtn');
+  const calibStatus = document.getElementById('calibStatus');
+  const calModal = document.getElementById('calModal');
+  const calDistInput = document.getElementById('calDistInput');
+  const calSave = document.getElementById('calSave');
+  const calCancel = document.getElementById('calCancel');
+
+  // State
+  let topY = null, botY = null;
+  let dragging = null;
+  let videoTrackSettings = null;
+
+  // Focal length in pixels (relative to captured frame height), derived from
+  // camera horizontal/vertical FOV if available, else a typical smartphone default.
+  // Formula used: distance = (real_height_cm * focal_px) / pixel_height
+  // focal_px is calibrated against the *displayed* video element height.
+  let focalPx = null; // will be set on video metadata load, then possibly recalibrated
+  const DEFAULT_VERTICAL_FOV_DEG = 55; // typical rear camera vertical FOV approx
+  let calibrationFactor = 1; // multiplier learned from user calibration
+
+  function loadCalibration(){
+    const saved = localStorage.getItem('rf_calibration_factor');
+    if (saved) calibrationFactor = parseFloat(saved) || 1;
+    updateCalibStatus();
+  }
+  function saveCalibration(f){
+    calibrationFactor = f;
+    localStorage.setItem('rf_calibration_factor', String(f));
+    updateCalibStatus();
+  }
+  function updateCalibStatus(){
+    if (calibrationFactor !== 1){
+      calibStatus.textContent = 'Фокусное расстояние: откалибровано';
+      calibBtn.classList.add('on');
+    } else {
+      calibStatus.textContent = 'Фокусное расстояние: по умолчанию';
+      calibBtn.classList.remove('on');
+    }
+  }
+
+  async function startCamera(){
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false
+      });
+      video.srcObject = stream;
+      const track = stream.getVideoTracks()[0];
+      videoTrackSettings = track.getSettings ? track.getSettings() : null;
+
+      video.onloadedmetadata = () => {
+        video.play();
+        computeFocalPx();
+        startOverlay.style.display = 'none';
+        hud.style.display = 'block';
+        initHandles();
+      };
+    } catch (err) {
+      camError.style.display = 'block';
+      console.error(err);
+    }
+  }
+
+  function computeFocalPx(){
+    // Base focal length in pixels using displayed viewport height and an assumed vertical FOV.
+    const dispH = viewport.clientHeight;
+    const fovRad = DEFAULT_VERTICAL_FOV_DEG * Math.PI / 180;
+    focalPx = (dispH / 2) / Math.tan(fovRad / 2);
+  }
+
+  function initHandles(){
+    const h = viewport.clientHeight;
+    topY = h * 0.28;
+    botY = h * 0.72;
+    layout();
+  }
+
+  function layout(){
+    if (topY === null) return;
+    topHandle.style.top = topY + 'px';
+    botHandle.style.top = botY + 'px';
+
+    const top = Math.min(topY, botY);
+    const bot = Math.max(topY, botY);
+    vBracket.style.top = top + 'px';
+    vBracket.style.height = (bot - top) + 'px';
+    heightReadout.style.top = ((top+bot)/2 - 7) + 'px';
+
+    computeDistance();
+  }
+
+  function computeDistance(){
+    if (topY === null || botY === null || !focalPx) return;
+    const pixelHeight = Math.abs(botY - topY);
+    if (pixelHeight < 4) {
+      distValue.textContent = '—';
+      distSub.textContent = 'Разведите маркеры дальше друг от друга';
+      heightReadout.textContent = '';
+      return;
+    }
+    const realHeightCm = parseFloat(objInput.value);
+    if (!realHeightCm || realHeightCm <= 0){
+      distValue.textContent = '—';
+      distSub.textContent = 'Укажите высоту объекта';
+      heightReadout.textContent = '';
+      return;
+    }
+
+    const effectiveFocal = focalPx * calibrationFactor;
+    const distCm = (realHeightCm * effectiveFocal) / pixelHeight;
+    const distM = distCm / 100;
+
+    if (distM < 0.5){
+      distValue.textContent = distCm.toFixed(0);
+      document.getElementById('distUnit').textContent = 'см';
+    } else {
+      document.getElementById('distUnit').textContent = 'м';
+      distValue.textContent = distM < 10 ? distM.toFixed(2) : distM.toFixed(1);
+    }
+    distSub.textContent = 'Оценка расстояния до объекта';
+    heightReadout.textContent = pixelHeight.toFixed(0) + ' px';
+  }
+
+  // Dragging logic
+  function bindDrag(handle, setter){
+    handle.addEventListener('pointerdown', (e) => {
+      dragging = { setter };
+      handle.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+  }
+  bindDrag(topHandle, (y)=>{ topY = y; });
+  bindDrag(botHandle, (y)=>{ botY = y; });
+
+  hud.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const rect = viewport.getBoundingClientRect();
+    let y = e.clientY - rect.top;
+    y = Math.max(20, Math.min(viewport.clientHeight - 20, y));
+    dragging.setter(y);
+    layout();
+  });
+  window.addEventListener('pointerup', () => { dragging = null; });
+  window.addEventListener('pointercancel', () => { dragging = null; });
+
+  window.addEventListener('resize', () => {
+    if (video.readyState >= 1) computeFocalPx();
+    layout();
+  });
+
+  objInput.addEventListener('input', () => {
+    presets.forEach(p => p.classList.remove('active'));
+    computeDistance();
+  });
+
+  presets.forEach(p => {
+    p.addEventListener('click', () => {
+      objInput.value = p.dataset.v;
+      presets.forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      computeDistance();
+    });
+  });
+
+  startBtn.addEventListener('click', startCamera);
+
+  // Calibration modal
+  calibBtn.addEventListener('click', () => {
+    calModal.style.display = 'flex';
+  });
+  calCancel.addEventListener('click', () => {
+    calModal.style.display = 'none';
+  });
+  calSave.addEventListener('click', () => {
+    const actualCm = parseFloat(calDistInput.value);
+    const realHeightCm = parseFloat(objInput.value);
+    const pixelHeight = Math.abs(botY - topY);
+    if (!actualCm || actualCm <= 0 || !realHeightCm || pixelHeight < 4){
+      calDistInput.style.borderColor = '#E0645A';
+      return;
+    }
+    // distance = real_height * (focalPx * factor) / pixelHeight
+    // => factor = (distance * pixelHeight) / (real_height * focalPx)
+    const factor = (actualCm * pixelHeight) / (realHeightCm * focalPx);
+    saveCalibration(factor);
+    calModal.style.display = 'none';
+    computeDistance();
+  });
+
+  loadCalibration();
+})();
+</script>
+
+</body>
+</html>
