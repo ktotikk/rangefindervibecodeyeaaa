@@ -148,64 +148,65 @@
     opacity: 0.9;
   }
 
-  /* Draggable marker line: two horizontal handles user drags to bracket object height */
+  /* Freely draggable point markers (2D) connected by a measurement line */
   #markerLayer {
     position: absolute;
     inset: 0;
     pointer-events: auto;
   }
 
-  .handle-row {
+  .pt {
     position: absolute;
-    left: 0;
-    right: 0;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    touch-action: none;
     display: flex;
     align-items: center;
-    touch-action: none;
+    justify-content: center;
   }
 
-  .handle-line {
-    flex: 1;
-    height: 1px;
-    background: var(--reticle);
-    opacity: 0.9;
-    position: relative;
-  }
-  .handle-line::before, .handle-line::after {
-    content: '';
-    position: absolute;
-    top: -3px;
-    width: 1px;
-    height: 7px;
-    background: var(--reticle);
-  }
-  .handle-line::before { left: 10%; }
-  .handle-line::after { left: 90%; }
-
-  .handle-grip {
-    width: 34px;
-    height: 34px;
-    margin: -17px 0 0 -17px;
+  .pt-ring {
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    background: rgba(159,232,112,0.14);
+    background: rgba(159,232,112,0.12);
     border: 1.5px solid var(--reticle);
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
-    left: 8px;
   }
-  .handle-grip::after {
+  .pt-ring::after {
     content: '';
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: var(--reticle);
   }
-
-  .handle-tag {
+  .pt-ring::before {
+    content: '';
     position: absolute;
-    left: 12px;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px dashed var(--reticle-dim);
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .pt.tracking .pt-ring::before { opacity: 0.55; animation: trackPulse 1.6s ease-in-out infinite; }
+  .pt.lost .pt-ring { border-color: var(--danger); background: rgba(224,100,90,0.14); }
+  .pt.lost .pt-ring::after { background: var(--danger); }
+
+  @keyframes trackPulse {
+    0%, 100% { transform: scale(1); opacity: 0.35; }
+    50% { transform: scale(1.15); opacity: 0.7; }
+  }
+
+  .pt-tag {
+    position: absolute;
+    top: -19px;
+    left: 50%;
+    transform: translateX(-50%);
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
     letter-spacing: 0.08em;
@@ -213,21 +214,21 @@
     background: rgba(10,12,11,0.55);
     padding: 2px 6px;
     border-radius: 2px;
-    top: -20px;
+    white-space: nowrap;
   }
 
-  #vBracket {
+  #measureLine {
     position: absolute;
-    left: 50%;
-    width: 1px;
-    background: repeating-linear-gradient(to bottom, var(--reticle-dim) 0 4px, transparent 4px 8px);
+    inset: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
+    overflow: visible;
   }
 
   #heightReadout {
     position: absolute;
-    left: 50%;
-    transform: translateX(14px);
+    transform: translate(14px, -50%);
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     color: var(--steel);
@@ -235,7 +236,28 @@
     white-space: nowrap;
   }
 
-  /* ---------- DATA meow PANEL ---------- */
+  #trackToggleWrap {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    pointer-events: auto;
+  }
+  #trackToggle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--steel);
+    background: rgba(10,12,11,0.55);
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    border-radius: 20px;
+  }
+  #trackToggle.on {
+    color: var(--reticle);
+    border-color: var(--reticle-dim);
+  }
+
+  /* ---------- DATA PANEL ---------- */
   #panel {
     background: var(--panel);
     border-top: 1px solid var(--line);
@@ -431,21 +453,23 @@
       <div class="corner tr"></div>
       <div class="corner bl"></div>
       <div class="corner br"></div>
-      <div id="topLabel">НАВЕДИТЕ МАРКЕРЫ НА ОБЪЕКТ</div>
+      <div id="topLabel">ПЕРЕТАЩИТЕ МАРКЕРЫ НА ОБЪЕКТ</div>
 
-      <div id="vBracket"></div>
+      <svg id="measureLine"><line id="connectLine" stroke="#5c7a44" stroke-width="1" stroke-dasharray="4 4"/></svg>
       <div id="heightReadout"></div>
 
+      <div id="trackToggleWrap">
+        <button id="trackToggle">Трекинг: выкл</button>
+      </div>
+
       <div id="markerLayer">
-        <div class="handle-row" id="topHandle">
-          <div class="handle-line"></div>
-          <div class="handle-tag">ВЕРХ</div>
-          <div class="handle-grip"></div>
+        <div class="pt" id="topHandle">
+          <div class="pt-tag">ВЕРХ</div>
+          <div class="pt-ring"></div>
         </div>
-        <div class="handle-row" id="botHandle">
-          <div class="handle-line"></div>
-          <div class="handle-tag">НИЗ</div>
-          <div class="handle-grip"></div>
+        <div class="pt" id="botHandle">
+          <div class="pt-tag">НИЗ</div>
+          <div class="pt-ring"></div>
         </div>
       </div>
     </div>
@@ -468,7 +492,7 @@
       <span id="distValue">—</span>
       <span id="distUnit">м</span>
     </div>
-    <div id="distSub">Разведите маркеры по высоте объекта в кадре</div>
+    <div id="distSub">Перетащите маркеры на верх и низ объекта</div>
 
     <div id="calibRow">
       <span id="calibStatus">Фокусное расстояние: по умолчанию</span>
@@ -499,7 +523,8 @@
   const viewport = document.getElementById('viewport');
   const topHandle = document.getElementById('topHandle');
   const botHandle = document.getElementById('botHandle');
-  const vBracket = document.getElementById('vBracket');
+  const connectLine = document.getElementById('connectLine');
+  const measureLineSvg = document.getElementById('measureLine');
   const heightReadout = document.getElementById('heightReadout');
   const objInput = document.getElementById('objInput');
   const distValue = document.getElementById('distValue');
@@ -511,11 +536,13 @@
   const calDistInput = document.getElementById('calDistInput');
   const calSave = document.getElementById('calSave');
   const calCancel = document.getElementById('calCancel');
+  const trackToggle = document.getElementById('trackToggle');
 
-  // State
-  let topY = null, botY = null;
+  // State — points are now free 2D coordinates {x, y}
+  let top = null, bot = null; // {x,y}
   let dragging = null;
   let videoTrackSettings = null;
+  let trackingEnabled = false;
 
   // Focal length in pixels (relative to captured frame height), derived from
   // camera horizontal/vertical FOV if available, else a typical smartphone default.
@@ -576,29 +603,36 @@
   }
 
   function initHandles(){
-    const h = viewport.clientHeight;
-    topY = h * 0.28;
-    botY = h * 0.72;
+    const w = viewport.clientWidth, h = viewport.clientHeight;
+    top = { x: w * 0.5, y: h * 0.28 };
+    bot = { x: w * 0.5, y: h * 0.72 };
     layout();
   }
 
   function layout(){
-    if (topY === null) return;
-    topHandle.style.top = topY + 'px';
-    botHandle.style.top = botY + 'px';
+    if (!top || !bot) return;
+    topHandle.style.left = top.x + 'px';
+    topHandle.style.top = top.y + 'px';
+    botHandle.style.left = bot.x + 'px';
+    botHandle.style.top = bot.y + 'px';
 
-    const top = Math.min(topY, botY);
-    const bot = Math.max(topY, botY);
-    vBracket.style.top = top + 'px';
-    vBracket.style.height = (bot - top) + 'px';
-    heightReadout.style.top = ((top+bot)/2 - 7) + 'px';
+    connectLine.setAttribute('x1', top.x);
+    connectLine.setAttribute('y1', top.y);
+    connectLine.setAttribute('x2', bot.x);
+    connectLine.setAttribute('y2', bot.y);
+
+    const midX = (top.x + bot.x) / 2;
+    const midY = (top.y + bot.y) / 2;
+    heightReadout.style.left = midX + 'px';
+    heightReadout.style.top = midY + 'px';
 
     computeDistance();
   }
 
   function computeDistance(){
-    if (topY === null || botY === null || !focalPx) return;
-    const pixelHeight = Math.abs(botY - topY);
+    if (!top || !bot || !focalPx) return;
+    const dx = bot.x - top.x, dy = bot.y - top.y;
+    const pixelHeight = Math.sqrt(dx*dx + dy*dy);
     if (pixelHeight < 4) {
       distValue.textContent = '—';
       distSub.textContent = 'Разведите маркеры дальше друг от друга';
@@ -628,30 +662,177 @@
     heightReadout.textContent = pixelHeight.toFixed(0) + ' px';
   }
 
-  // Dragging logic
-  function bindDrag(handle, setter){
+  // Dragging logic — free 2D movement
+  function bindDrag(handle, getPoint, setPoint){
     handle.addEventListener('pointerdown', (e) => {
-      dragging = { setter };
+      dragging = { setPoint, key: handle.id };
       handle.setPointerCapture(e.pointerId);
       e.preventDefault();
+      // manual drag overrides tracking for this point until re-enabled
+      handle.classList.remove('lost');
     });
   }
-  bindDrag(topHandle, (y)=>{ topY = y; });
-  bindDrag(botHandle, (y)=>{ botY = y; });
+  bindDrag(topHandle, ()=>top, (x,y)=>{ top = {x,y}; });
+  bindDrag(botHandle, ()=>bot, (x,y)=>{ bot = {x,y}; });
 
   hud.addEventListener('pointermove', (e) => {
     if (!dragging) return;
     const rect = viewport.getBoundingClientRect();
+    let x = e.clientX - rect.left;
     let y = e.clientY - rect.top;
-    y = Math.max(20, Math.min(viewport.clientHeight - 20, y));
-    dragging.setter(y);
+    x = Math.max(10, Math.min(viewport.clientWidth - 10, x));
+    y = Math.max(10, Math.min(viewport.clientHeight - 10, y));
+    dragging.setPoint(x, y);
+    if (trackingEnabled) capturePatch(dragging.key === 'topHandle' ? 'top' : 'bot');
     layout();
   });
   window.addEventListener('pointerup', () => { dragging = null; });
   window.addEventListener('pointercancel', () => { dragging = null; });
 
+  // ---------- Lightweight patch tracking (template matching) ----------
+  // Uses a hidden canvas to sample a small patch around each marker from the
+  // video frame, then each animation frame searches a small window in the new
+  // frame for the best-matching patch (sum of absolute differences on
+  // grayscale). This is a lightweight optical-flow-like tracker: good for
+  // slow, small movements and stable lighting; it can lose the target on fast
+  // motion, big lighting changes, or low-texture surfaces.
+  const PATCH = 16;       // half-size of template patch in px (sampled at trackCanvas scale)
+  const SEARCH = 10;      // search radius per frame in px (at trackCanvas scale)
+  const TRACK_SCALE = 0.5; // downscale factor for tracking canvas (perf)
+
+  const trackCanvas = document.createElement('canvas');
+  const trackCtx = trackCanvas.getContext('2d', { willReadFrequently: true });
+  let templates = { top: null, bot: null }; // {data: Uint8ClampedArray grayscale, w, h, cx, cy}
+  let rafId = null;
+
+  function videoToCanvasCoords(pt){
+    // Map viewport (displayed) coords to the tracking canvas coords.
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    const cw = trackCanvas.width, ch = trackCanvas.height;
+    return { x: (pt.x / vw) * cw, y: (pt.y / vh) * ch };
+  }
+  function canvasToViewportCoords(pt){
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    const cw = trackCanvas.width, ch = trackCanvas.height;
+    return { x: (pt.x / cw) * vw, y: (pt.y / ch) * vh };
+  }
+
+  function ensureTrackCanvasSize(){
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    trackCanvas.width = Math.round(vw * TRACK_SCALE);
+    trackCanvas.height = Math.round(vh * TRACK_SCALE);
+  }
+
+  function drawVideoFrame(){
+    // object-fit: cover mapping from video intrinsic size to canvas (== viewport aspect)
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return false;
+    const cw = trackCanvas.width, ch = trackCanvas.height;
+    const videoRatio = vw / vh, canvasRatio = cw / ch;
+    let sx, sy, sw, sh;
+    if (videoRatio > canvasRatio) {
+      sh = vh; sw = vh * canvasRatio; sx = (vw - sw) / 2; sy = 0;
+    } else {
+      sw = vw; sh = vw / canvasRatio; sx = 0; sy = (vh - sh) / 2;
+    }
+    trackCtx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+    return true;
+  }
+
+  function grayscalePatch(cx, cy, half){
+    const cw = trackCanvas.width, ch = trackCanvas.height;
+    const x0 = Math.round(cx - half), y0 = Math.round(cy - half);
+    const size = half * 2;
+    if (x0 < 0 || y0 < 0 || x0 + size >= cw || y0 + size >= ch) return null;
+    const img = trackCtx.getImageData(x0, y0, size, size).data;
+    const gray = new Uint8ClampedArray(size * size);
+    for (let i = 0, p = 0; i < img.length; i += 4, p++){
+      gray[p] = (img[i] * 0.299 + img[i+1] * 0.587 + img[i+2] * 0.114) | 0;
+    }
+    return { data: gray, size };
+  }
+
+  function capturePatch(key){
+    if (!drawVideoFrame()) return;
+    const pt = key === 'top' ? top : bot;
+    const c = videoToCanvasCoords(pt);
+    const patch = grayscalePatch(c.x, c.y, PATCH);
+    templates[key] = patch ? { ...patch, cx: c.x, cy: c.y } : null;
+  }
+
+  function matchPatch(key){
+    const tmpl = templates[key];
+    if (!tmpl) return null;
+    const cw = trackCanvas.width, ch = trackCanvas.height;
+    let bestScore = Infinity, bestX = tmpl.cx, bestY = tmpl.cy;
+    const step = 1;
+    for (let dy = -SEARCH; dy <= SEARCH; dy += step){
+      for (let dx = -SEARCH; dx <= SEARCH; dx += step){
+        const cx = tmpl.cx + dx, cy = tmpl.cy + dy;
+        const cand = grayscalePatch(cx, cy, PATCH);
+        if (!cand) continue;
+        let score = 0;
+        for (let i = 0; i < cand.data.length; i += 3){ // subsample for speed
+          score += Math.abs(cand.data[i] - tmpl.data[i]);
+        }
+        if (score < bestScore){ bestScore = score; bestX = cx; bestY = cy; }
+      }
+    }
+    // Normalize score by number of sampled pixels to get an avg-diff metric
+    const sampled = Math.ceil(tmpl.data.length / 3);
+    const avgDiff = bestScore / sampled;
+    return { cx: bestX, cy: bestY, avgDiff };
+  }
+
+  const LOST_THRESHOLD = 38; // avg grayscale diff (0-255) above which we consider tracking lost
+
+  function trackFrame(){
+    if (!trackingEnabled){ rafId = null; return; }
+    if (drawVideoFrame()){
+      ['top','bot'].forEach(key => {
+        const result = matchPatch(key);
+        const handle = key === 'top' ? topHandle : botHandle;
+        if (!result){
+          handle.classList.add('lost');
+        } else if (result.avgDiff > LOST_THRESHOLD){
+          handle.classList.add('lost');
+        } else {
+          handle.classList.remove('lost');
+          const vp = canvasToViewportCoords({ x: result.cx, y: result.cy });
+          if (key === 'top') top = vp; else bot = vp;
+          // slide the template center to the new match location
+          templates[key].cx = result.cx;
+          templates[key].cy = result.cy;
+        }
+      });
+      layout();
+    }
+    rafId = requestAnimationFrame(trackFrame);
+  }
+
+  function setTracking(on){
+    trackingEnabled = on;
+    trackToggle.textContent = 'Трекинг: ' + (on ? 'вкл' : 'выкл');
+    trackToggle.classList.toggle('on', on);
+    topHandle.classList.toggle('tracking', on);
+    botHandle.classList.toggle('tracking', on);
+    if (on){
+      ensureTrackCanvasSize();
+      capturePatch('top');
+      capturePatch('bot');
+      if (!rafId) rafId = requestAnimationFrame(trackFrame);
+    } else {
+      topHandle.classList.remove('lost');
+      botHandle.classList.remove('lost');
+      if (rafId){ cancelAnimationFrame(rafId); rafId = null; }
+    }
+  }
+
+  trackToggle.addEventListener('click', () => setTracking(!trackingEnabled));
+
   window.addEventListener('resize', () => {
     if (video.readyState >= 1) computeFocalPx();
+    if (trackingEnabled) ensureTrackCanvasSize();
     layout();
   });
 
@@ -681,7 +862,7 @@
   calSave.addEventListener('click', () => {
     const actualCm = parseFloat(calDistInput.value);
     const realHeightCm = parseFloat(objInput.value);
-    const pixelHeight = Math.abs(botY - topY);
+    const pixelHeight = (top && bot) ? Math.hypot(bot.x - top.x, bot.y - top.y) : 0;
     if (!actualCm || actualCm <= 0 || !realHeightCm || pixelHeight < 4){
       calDistInput.style.borderColor = '#E0645A';
       return;
